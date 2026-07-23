@@ -1,0 +1,11 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[remote "orgin"]
+	url = https://github.com/Krish-sharma-2003/Auto-Stack.git
+	fetch = +refs/heads/*:refs/remotes/orgin/*
+[remote "origin"]
+	url = https://github.com/Krish-sharma-2003/Auto-Stack.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
