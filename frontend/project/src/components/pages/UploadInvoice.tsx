@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, CheckCircle, XCircle, X, Sparkles, Database, MapPin, FileSearch, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,7 +6,7 @@ import { API_BASE } from '@/lib/api';
 
 type ProcessingStep = 'upload' | 'extracting' | 'gstin' | 'state' | 'stock' | 'saving' | 'complete' | 'error';
 
-type StockAction = 'CREATED' | 'UPDATED' | 'ERROR' | 'PENDING';
+type StockAction = 'CREATED' | 'UPDATED' | 'ERROR' | 'PENDING' | 'SKIPPED';
 
 interface ExtractedData {
   vendorName: string;
@@ -25,6 +25,8 @@ interface ExtractedData {
   action: string;
   status: 'PROCESSED' | 'MANUAL_REVIEW' | 'BLOCKED';
   message: string;
+  stockUpdated: boolean;
+  stockReason: string;
   flags: string[];
   items: { product: string; qty: number; unit: string; rate: number; amount: number; stockUpdate: StockAction }[];
 }
@@ -48,6 +50,7 @@ const formatAction = (action: string) => {
 
 export function UploadInvoice() {
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [currentStep, setCurrentStep] = useState<ProcessingStep>('upload');
   const [stepIndex, setStepIndex] = useState(0);
@@ -124,7 +127,8 @@ export function UploadInvoice() {
       (result.stock_update?.results || []).forEach((r: any) => {
         if (r?.product) stockActions[r.product.toLowerCase()] = r.action;
       });
-      const stockRan = !!result.stock_update;
+      const stockUpdated = result.stock_updated === true;
+      const stockReason = result.reason || 'Stock update was skipped';
 
       const realData: ExtractedData = {
         vendorName: invoice.vendor_name || 'Unknown',
@@ -143,6 +147,8 @@ export function UploadInvoice() {
         action: formatAction(riskAssessment.action || 'AUTO_APPROVE'),
         status: result.status || (result.success ? 'PROCESSED' : 'BLOCKED'),
         message: result.message || '',
+        stockUpdated,
+        stockReason,
         flags: riskAssessment.flags || [],
         items: (invoice.items || []).map((item: any) => ({
           product: item.name || 'Unknown',
@@ -151,7 +157,7 @@ export function UploadInvoice() {
           rate: item.rate ?? item.unit_price ?? 0,
           amount: item.amount ?? item.total_price ?? 0,
           stockUpdate: (stockActions[(item.name || '').toLowerCase()] ||
-            (stockRan ? 'UPDATED' : 'PENDING')) as StockAction,
+            (stockUpdated ? 'UPDATED' : 'SKIPPED')) as StockAction,
         })),
       };
 
@@ -238,21 +244,24 @@ export function UploadInvoice() {
               </h3>
               <p className="text-slate-500 mb-6">PDF, JPG, PNG supported — Max 10MB</p>
 
-              <label className="inline-block">
+              <div className="inline-block">
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  onClick={() => fileInputRef.current?.click()}
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   Browse Files
                 </motion.button>
-              </label>
+              </div>
 
               <p className="text-xs text-slate-400 mt-4">or drag and drop</p>
             </div>
@@ -542,9 +551,13 @@ export function UploadInvoice() {
                               ? 'bg-green-100 text-green-700'
                               : item.stockUpdate === 'ERROR'
                               ? 'bg-red-100 text-red-700'
+                              : item.stockUpdate === 'SKIPPED'
+                              ? 'bg-slate-100 text-slate-600'
                               : 'bg-slate-100 text-slate-600'
                           )}>
-                            {item.stockUpdate}
+                            {item.stockUpdate === 'SKIPPED'
+                              ? `SKIPPED - ${extractedData.stockReason}`
+                              : item.stockUpdate}
                           </span>
                         </td>
                       </motion.tr>

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Printer, Eye, FileText, MessageCircle } from 'lucide-react';
-import { parties, products, units } from '@/data/mockData';
+import { parties, units } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+import { API_BASE } from '@/lib/api';
 
 interface InvoiceItem {
   id: string;
@@ -16,6 +17,15 @@ interface InvoiceItem {
   amount: number;
 }
 
+interface InventoryProduct {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  hsn?: string;
+}
+
 function generateId() {
   return Math.random().toString(36).substr(2, 9);
 }
@@ -24,6 +34,9 @@ const partyNames = parties.map(p => p.name);
 
 export function SalesInvoice() {
   const [partyName, setPartyName] = useState('');
+  const [invoiceNo] = useState(
+    () => `SI-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000) + 1).padStart(3, '0')}`
+  );
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [transportName, setTransportName] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
@@ -32,8 +45,32 @@ export function SalesInvoice() {
     { id: generateId(), productId: '', product: '', hsn: '', qty: 0, unit: 'Strips', rate: 0, discount: 0, amount: 0 }
   ]);
   const [showPreview, setShowPreview] = useState(false);
+  const [inventoryProducts, setInventoryProducts] = useState<InventoryProduct[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
 
-  const invoiceNo = `SI-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000) + 1).padStart(3, '0')}`;
+  useEffect(() => {
+    let active = true;
+
+    const loadInventory = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/inventory/`);
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.detail || `Server error (${response.status})`);
+        }
+        if (active) setInventoryProducts(result.items || []);
+      } catch {
+        if (active) setSaveError(`Could not load inventory from ${API_BASE}.`);
+      }
+    };
+
+    loadInventory();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const addItem = () => {
     setItems([...items, {
@@ -63,12 +100,12 @@ export function SalesInvoice() {
           updated.amount = updated.qty * updated.rate * (1 - updated.discount / 100);
         }
         if (field === 'productId') {
-          const product = products.find(p => p.id === value);
+          const product = inventoryProducts.find(p => p.id === value);
           if (product) {
-            updated.product = product.name;
-            updated.hsn = product.hsn;
+            updated.product = product.product_name;
+            updated.hsn = product.hsn || '';
             updated.unit = product.unit;
-            updated.rate = product.rate;
+            updated.rate = product.unit_price;
           }
         }
         return updated;
@@ -82,6 +119,67 @@ export function SalesInvoice() {
   const sgst = isInterstate ? 0 : subtotal * 0.09;
   const igst = isInterstate ? subtotal * 0.18 : 0;
   const grandTotal = subtotal + cgst + sgst + igst;
+
+  const handleSaveInvoice = async () => {
+    const validItems = items
+      .filter(item => item.product && item.qty > 0 && item.unit)
+      .map(({ product, qty, unit, rate, discount, amount }) => ({
+        product_name: product,
+        quantity: qty,
+        unit,
+        rate,
+        discount,
+        amount,
+      }));
+
+    if (!partyName || validItems.length === 0) {
+      setSaveError('Select a party and add at least one product with quantity.');
+      setSaveMessage('');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError('');
+    setSaveMessage('');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/sales-invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_no: invoiceNo,
+          party_name: partyName,
+          invoice_date: invoiceDate,
+          items: validItems,
+          subtotal,
+          tax_amount: cgst + sgst + igst,
+          total_amount: grandTotal,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || `Server error (${response.status})`);
+      }
+
+      const skippedReasons = (result.results || [])
+        .filter((item: { action?: string }) => item.action === 'SKIPPED')
+        .map((item: { reason?: string }) => item.reason)
+        .filter(Boolean);
+      setSaveMessage(
+        `${result.sold_count} items sold${
+          result.skipped_count ? `, ${result.skipped_count} skipped${skippedReasons[0] ? ` - ${skippedReasons[0]}` : ''}` : ''
+        }`
+      );
+    } catch (error) {
+      setSaveError(
+        error instanceof Error && error.message !== 'Failed to fetch'
+          ? error.message
+          : `Could not connect to backend at ${API_BASE}.`
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -194,8 +292,10 @@ export function SalesInvoice() {
                           className="w-full px-2 py-1.5 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
                         >
                           <option value="">Select Product</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
+                          {inventoryProducts.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.product_name} ({p.quantity} {p.unit || 'pcs'} available)
+                            </option>
                           ))}
                         </select>
                       </td>
@@ -312,6 +412,11 @@ export function SalesInvoice() {
 
         {/* Actions */}
         <div className="p-6 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-3 justify-end">
+          {(saveMessage || saveError) && (
+            <p className={cn('mr-auto self-center text-sm font-medium', saveError ? 'text-red-600' : 'text-green-600')}>
+              {saveError || saveMessage}
+            </p>
+          )}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -346,11 +451,14 @@ export function SalesInvoice() {
             Share on WhatsApp
           </motion.button>
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={handleSaveInvoice}
+            disabled={isSaving}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Save Invoice
+            {isSaving ? 'Saving…' : 'Save Invoice'}
           </motion.button>
         </div>
       </motion.div>

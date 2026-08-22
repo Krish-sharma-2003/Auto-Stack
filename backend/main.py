@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.invoice_router import router as invoice_router
 from routers.inventory_router import router as inventory_router
+from routers.challan_router import router as challan_router
+from routers.sales_invoice_router import router as sales_invoice_router
 
 app = FastAPI(
     title="Smart Inventory API",
@@ -26,6 +28,8 @@ app.add_middleware(
 # Register routers
 app.include_router(invoice_router)
 app.include_router(inventory_router)
+app.include_router(challan_router)
+app.include_router(sales_invoice_router)
 
 
 @app.get("/")

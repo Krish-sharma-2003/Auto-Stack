@@ -1,5 +1,10 @@
 from core.supabase_client import supabase
 from datetime import datetime
+import re
+
+
+def normalize_product_name(product_name: str) -> str:
+    return re.sub(r"\s+", " ", product_name.strip())
 
 
 async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict:
@@ -24,7 +29,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
     results = []
 
     for item in items:
-        product_name = item.get("name", "").strip()
+        product_name = normalize_product_name(item.get("name", ""))
         quantity = item.get("quantity", 0)
         unit = item.get("unit", "pcs")
         unit_price = item.get("unit_price") or item.get("rate") or 0
@@ -36,7 +41,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
             # Check if product already exists in inventory
             existing = supabase.table("inventory") \
                 .select("*") \
-                .ilike("product_name", product_name) \
+                .ilike("product_name", normalize_product_name(product_name)) \
                 .execute()
 
             if existing.data:

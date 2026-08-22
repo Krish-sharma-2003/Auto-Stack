@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Printer, Eye } from 'lucide-react';
 import { parties, products, units } from '@/data/mockData';
 import { cn } from '@/lib/utils';
+import { API_BASE } from '@/lib/api';
 
 interface ChallanItem {
   id: string;
@@ -18,6 +19,9 @@ function generateId() {
 
 export function Challan() {
   const [partyName, setPartyName] = useState('');
+  const [challanNo] = useState(
+    () => `CH-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000) + 1).padStart(3, '0')}`
+  );
   const [challanDate, setChallanDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [transportName, setTransportName] = useState('');
@@ -26,8 +30,9 @@ export function Challan() {
     { id: generateId(), productId: '', product: '', qty: 0, unit: 'Pieces' }
   ]);
   const [showPreview, setShowPreview] = useState(false);
-
-  const challanNo = `CH-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000) + 1).padStart(3, '0')}`;
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   const partyNames = parties.map(p => p.name);
 
@@ -65,6 +70,53 @@ export function Challan() {
   };
 
   const selectedParty = parties.find(p => p.name === partyName);
+
+  const handleSaveChallan = async () => {
+    const validItems = items
+      .filter(item => item.product && item.qty > 0 && item.unit)
+      .map(({ product, qty, unit }) => ({ product, qty, unit }));
+
+    if (!partyName || !deliveryAddress || validItems.length === 0) {
+      setSaveError('Select a party, enter delivery address, and add at least one item with quantity.');
+      setSaveMessage('');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError('');
+    setSaveMessage('');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/challans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challan_no: challanNo,
+          party_name: partyName,
+          challan_date: challanDate,
+          delivery_address: deliveryAddress,
+          transport_name: transportName,
+          vehicle_no: vehicleNo,
+          items: validItems,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || `Server error (${response.status})`);
+      }
+
+      setSaveMessage(`Challan ${challanNo} saved successfully.`);
+    } catch (error) {
+      setSaveError(
+        error instanceof Error && error.message !== 'Failed to fetch'
+          ? error.message
+          : `Could not connect to backend at ${API_BASE}.`
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -235,6 +287,11 @@ export function Challan() {
 
         {/* Actions */}
         <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3 justify-end">
+          {(saveMessage || saveError) && (
+            <p className={cn('mr-auto self-center text-sm font-medium', saveError ? 'text-red-600' : 'text-green-600')}>
+              {saveError || saveMessage}
+            </p>
+          )}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -260,11 +317,14 @@ export function Challan() {
             Print Challan
           </motion.button>
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={handleSaveChallan}
+            disabled={isSaving}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Save Challan
+            {isSaving ? 'Saving…' : 'Save Challan'}
           </motion.button>
         </div>
       </motion.div>
