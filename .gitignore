@@ -30,3 +30,8 @@ backend/.env
 .env
 *.env
 
+__pycache__/
+*.pyc
+venv/
+node_modules/
+.env
