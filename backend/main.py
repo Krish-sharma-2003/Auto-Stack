@@ -1,16 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.invoice_router import router as invoice_router
-from routers.inventory_router import router as inventory_router
+from routers.inventory_router import router as inventory_router 
 from routers.challan_router import router as challan_router
 from routers.sales_invoice_router import router as sales_invoice_router
-
+from routers.stock_movement_router import router as stock_movement_router
+from routers.party_router import router as party_router
 app = FastAPI(
     title="Smart Inventory API",
     description="AI-powered invoice processing & inventory management system",
     version="1.0.0"
 )
-
 # CORS — allow frontend to call backend
 app.add_middleware(
     CORSMiddleware,
@@ -24,13 +24,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Register routers
 app.include_router(invoice_router)
 app.include_router(inventory_router)
 app.include_router(challan_router)
 app.include_router(sales_invoice_router)
-
+app.include_router(stock_movement_router)
+app.include_router(party_router)
 
 @app.get("/")
 async def root():

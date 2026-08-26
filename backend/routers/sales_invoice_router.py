@@ -56,6 +56,8 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
     results = []
     for item in invoice.items:
         product_name = normalize_product_name(item.product_name)
+        inventory_updated = False
+        available_qty = None
         try:
             existing = supabase.table("inventory") \
                 .select("*") \
@@ -88,6 +90,7 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
                 "quantity": new_quantity,
                 "last_updated": datetime.utcnow().isoformat(),
             }).eq("id", product["id"]).execute()
+            inventory_updated = True
 
             supabase.table("stock_movements").insert({
                 "invoice_id": invoice_id,
@@ -111,10 +114,33 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
                 product_name,
                 item.quantity,
             )
+
+            rollback_error = None
+            if inventory_updated:
+                try:
+                    supabase.table("inventory").update({
+                        "quantity": available_qty,
+                        "last_updated": datetime.utcnow().isoformat(),
+                    }).eq("id", product["id"]).execute()
+                except Exception as rollback_exc:
+                    logger.exception(
+                        "Sales inventory rollback failed: invoice_id=%s product=%r quantity=%s",
+                        invoice_id,
+                        product_name,
+                        item.quantity,
+                    )
+                    rollback_error = str(rollback_exc)
+
+            reason = str(exc)
+            if inventory_updated and rollback_error is None:
+                reason += " Inventory quantity was reverted."
+            elif rollback_error:
+                reason += f" Inventory rollback also failed: {rollback_error}"
+
             results.append({
                 "product": product_name,
                 "action": "ERROR",
-                "reason": str(exc),
+                "reason": reason,
             })
 
     sold_count = len([item for item in results if item["action"] == "SOLD"])
