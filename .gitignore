@@ -35,3 +35,7 @@ __pycache__/
 venv/
 node_modules/
 .env
+
+frontend/project/.env
+.envdocs/client_secret_*.json
+*.json

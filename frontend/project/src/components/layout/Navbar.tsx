@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { Search, Bell, CheckCircle, AlertCircle, Info, AlertTriangle, LogOut } from 'lucide-react';
 import { notifications } from '@/data/mockData';
+import { supabase } from '@/lib/supabaseClient';
 import { cn } from '@/lib/utils';
 
 interface NavbarProps {
   collapsed: boolean;
+  user: User;
 }
 
 const iconMap = {
@@ -22,10 +25,19 @@ const colorMap = {
   info: 'text-blue-400',
 };
 
-export function Navbar({ collapsed }: NavbarProps) {
+export function Navbar({ collapsed, user }: NavbarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const unreadCount = notifications.filter(n => !n.read).length;
+  const fullName = user.user_metadata.full_name || user.user_metadata.name || user.email || 'StockFlow user';
+  const avatarUrl = user.user_metadata.avatar_url || user.user_metadata.picture;
+  const initials = fullName.split(' ').map((part: string) => part[0]).join('').slice(0, 2).toUpperCase();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setShowUserMenu(false);
+  };
 
   return (
     <motion.nav
@@ -126,15 +138,28 @@ export function Navbar({ collapsed }: NavbarProps) {
           </AnimatePresence>
         </div>
 
-        {/* User Avatar */}
-        <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-            RK
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-medium text-slate-800">Rajesh Kumar</p>
-            <p className="text-xs text-slate-500">Admin</p>
-          </div>
+        {/* Authenticated user */}
+        <div className="relative pl-4 border-l border-slate-200">
+          <button type="button" onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-3 rounded-lg text-left hover:bg-slate-50 p-1">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">{initials}</div>
+            )}
+            <div className="hidden sm:block max-w-44">
+              <p className="text-sm font-medium text-slate-800 truncate">{fullName}</p>
+              <p className="text-xs text-slate-500 truncate">{user.email}</p>
+            </div>
+          </button>
+          <AnimatePresence>
+            {showUserMenu && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-slate-200 p-1 z-50">
+                <button type="button" onClick={handleSignOut} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50">
+                  <LogOut className="w-4 h-4" /> Sign out
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </motion.nav>

@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
+import { LoginScreen } from '@/components/auth/LoginScreen';
 import { Layout } from '@/components/layout/Layout';
 import { Dashboard } from '@/components/pages/Dashboard';
 import { UploadInvoice } from '@/components/pages/UploadInvoice';
@@ -20,12 +23,41 @@ import { PurchaseReport } from '@/components/pages/PurchaseReport';
 import { StockReport } from '@/components/pages/StockReport';
 import { CompanyProfile } from '@/components/pages/CompanyProfile';
 import { UserManagement } from '@/components/pages/UserManagement';
+import { isSupabaseConfigured, supabase } from '@/lib/supabaseClient';
 
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setLoading(false);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (!isSupabaseConfigured) {
+    return <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center text-slate-600">Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to `frontend/project/.env` to enable sign-in.</main>;
+  }
+  if (loading) {
+    return <main className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Checking your session...</main>;
+  }
+  if (!session) return <LoginScreen />;
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<Layout user={session.user} />}>
           <Route index element={<Dashboard />} />
           <Route path="upload" element={<UploadInvoice />} />
           <Route path="sales" element={<SalesInvoice />} />

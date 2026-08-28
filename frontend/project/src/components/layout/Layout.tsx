@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
 
-export function Layout() {
+interface LayoutProps {
+  user: User;
+}
+
+export function Layout({ user }: LayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
 
@@ -34,7 +39,7 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
-      <Navbar collapsed={collapsed} />
+      <Navbar collapsed={collapsed} user={user} />
 
       <motion.main
         initial={false}
