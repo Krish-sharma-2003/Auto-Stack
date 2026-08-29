@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
@@ -18,8 +18,11 @@ import {
   ChevronLeft,
   ChevronRight,
   BadgePercent,
+  Plus,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCompany } from '@/context/CompanyContext';
 
 const menuItems = [
   { section: 'MAIN', items: [
@@ -63,6 +66,22 @@ interface SidebarProps {
 export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const { companies, activeCompanyId, switchCompany, openCreateModal } = useCompany();
+  const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+
+  const activeCompany = companies.find(c => c.company_id === activeCompanyId);
+
+  useEffect(() => {
+    if (!showCompanyMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-company-menu]')) {
+        setShowCompanyMenu(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showCompanyMenu]);
 
   return (
     <motion.aside
@@ -71,21 +90,63 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className="fixed left-0 top-0 h-screen bg-sidebar text-white flex flex-col z-50"
     >
-      {/* Logo */}
+      {/* Logo + Company Switcher */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-white/10">
-        <AnimatePresence mode="wait">
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="flex items-center gap-2"
-            >
-              <Package className="w-8 h-8 text-blue-400" />
-              <span className="font-semibold text-lg">StockFlow</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="flex items-center gap-2 min-w-0">
+          <Package className="w-8 h-8 text-blue-400 flex-shrink-0" />
+          <AnimatePresence mode="wait">
+            {!collapsed && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="relative min-w-0"
+              >
+                <button
+                  onClick={() => setShowCompanyMenu(!showCompanyMenu)}
+                  className="flex items-center gap-1 hover:bg-white/5 rounded-lg px-1 py-0.5 transition-colors"
+                >
+                  <span className="font-semibold text-lg truncate max-w-[120px]">
+                    {activeCompany?.name || 'StockFlow'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                </button>
+                {showCompanyMenu && (
+                  <motion.div
+                    data-company-menu
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute left-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden"
+                  >
+                    <div className="py-1">
+                      {companies.map(c => (
+                        <button
+                          key={c.company_id}
+                          onClick={() => { switchCompany(c.company_id); setShowCompanyMenu(false); }}
+                          className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between ${
+                            c.company_id === activeCompanyId ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className="truncate">{c.name}</span>
+                          {c.company_id === activeCompanyId && (
+                            <span className="text-xs text-blue-500 ml-2">(Active)</span>
+                          )}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { setShowCompanyMenu(false); openCreateModal(); }}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create New Company
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
         {collapsed && <Package className="w-8 h-8 text-blue-400 mx-auto" />}
       </div>
 
