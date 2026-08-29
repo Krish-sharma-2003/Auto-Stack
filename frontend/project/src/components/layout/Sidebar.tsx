@@ -101,6 +101,7 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 className="relative min-w-0"
+                data-company-menu
               >
                 <button
                   onClick={() => setShowCompanyMenu(!showCompanyMenu)}
@@ -113,7 +114,6 @@ export function Sidebar({ collapsed, setCollapsed }: SidebarProps) {
                 </button>
                 {showCompanyMenu && (
                   <motion.div
-                    data-company-menu
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="absolute left-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden"
