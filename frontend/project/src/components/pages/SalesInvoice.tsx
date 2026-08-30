@@ -542,6 +542,8 @@ import { units } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
 import { AddPartyModal, Party } from '@/components/AddPartyModal';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 interface InvoiceItem {
   id: string;
@@ -571,6 +573,7 @@ function generateId() {
 const ADD_NEW_PARTY = '__add_new_party__';
 
 export function SalesInvoice() {
+  const { activeCompanyId } = useCompany();
   const [partyName, setPartyName] = useState('');
   const [parties, setParties] = useState<Party[]>([]);
   const [showAddParty, setShowAddParty] = useState(false);
@@ -592,7 +595,12 @@ export function SalesInvoice() {
 
   const loadParties = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/parties/`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/api/parties/?company_id=${activeCompanyId}`, { headers });
       const result = await response.json();
       if (response.ok && result.success) {
         setParties(result.parties || []);
@@ -607,7 +615,12 @@ export function SalesInvoice() {
 
     const loadInventory = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/inventory/`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/api/inventory/?company_id=${activeCompanyId}`, { headers });
         const result = await response.json();
         if (!response.ok || !result.success) {
           throw new Error(result.detail || `Server error (${response.status})`);
@@ -719,9 +732,14 @@ export function SalesInvoice() {
     setSaveMessage('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/sales-invoices`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/api/sales-invoices?company_id=${activeCompanyId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           invoice_no: invoiceNo,
           party_name: partyName,

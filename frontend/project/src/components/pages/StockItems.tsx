@@ -5,6 +5,8 @@ import { stockMovements } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
 import type { Product, StockMovement, StockStatus } from '@/types';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 const statusColors = {
   'In Stock': { bg: 'bg-green-100', text: 'text-green-700', dot: 'bg-green-500' },
@@ -21,6 +23,7 @@ export function StockItems() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { activeCompanyId } = useCompany();
 
   useEffect(() => {
     let active = true;
@@ -29,7 +32,12 @@ export function StockItems() {
       setLoading(true);
       setError('');
       try {
-        const res = await fetch(`${API_BASE}/api/inventory/`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_BASE}/api/inventory/?company_id=${activeCompanyId}`, { headers });
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.detail || `Server error (${res.status})`);

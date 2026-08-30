@@ -6,6 +6,8 @@ import { invoices, lowStockProducts, generateInvoiceVolumeData, generateStockVal
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
 import type { Invoice, RiskLevel } from '@/types';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 interface Stat {
   title: string;
@@ -197,15 +199,23 @@ export function Dashboard() {
   const invoiceData = generateInvoiceVolumeData();
   const stockData = generateStockValueByProduct();
   const riskData = generateRiskDistribution();
+  const { activeCompanyId } = useCompany();
 
   useEffect(() => {
     let active = true;
 
     const loadStats = async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const companyId = activeCompanyId;
+
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         const [invRes, invoiceRes] = await Promise.all([
-          fetch(`${API_BASE}/api/inventory/`),
-          fetch(`${API_BASE}/api/invoices/`),
+          fetch(`${API_BASE}/api/inventory/?company_id=${companyId}`, { headers }),
+          fetch(`${API_BASE}/api/invoices/?company_id=${companyId}`, { headers }),
         ]);
         const inventory = await invRes.json();
         const invoicesData = await invoiceRes.json();

@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, CheckCircle, XCircle, X, Sparkles, Database, MapPin, FileSearch, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 type ProcessingStep = 'upload' | 'extracting' | 'gstin' | 'state' | 'stock' | 'saving' | 'complete' | 'error';
 
@@ -56,6 +58,7 @@ export function UploadInvoice() {
   const [stepIndex, setStepIndex] = useState(0);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const { activeCompanyId } = useCompany();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -100,11 +103,19 @@ export function UploadInvoice() {
     });
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const formData = new FormData();
       formData.append('file', selectedFile);
+      if (activeCompanyId) formData.append('company_id', activeCompanyId);
+
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch(`${API_BASE}/api/invoices/upload`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 

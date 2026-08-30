@@ -1,9 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel, Field
 
 from core.supabase_client import supabase
+from core.auth import _get_user_from_header, _require_active_membership
 
 
 router = APIRouter(prefix="/api/challans", tags=["Challans"])
@@ -26,9 +27,12 @@ class ChallanCreate(BaseModel):
 
 
 @router.post("")
-async def create_challan(challan: ChallanCreate):
+async def create_challan(company_id: str = Query(...), authorization: str | None = Header(None), challan: ChallanCreate = ...):
+    user = _get_user_from_header(authorization)
+    _require_active_membership(user["id"], company_id)
     try:
         response = supabase.table("challans").insert({
+            "company_id": company_id,
             "challan_no": challan.challan_no,
             "party_name": challan.party_name,
             "challan_date": challan.challan_date.isoformat(),

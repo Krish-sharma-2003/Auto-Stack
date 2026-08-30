@@ -1,11 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Header
 from services.ocr_service import parse_invoice_image, parse_invoice_pdf
 from services.gstin_service import run_gstin_checks
 from services.inventory_service import update_stock_from_invoice
 from core.supabase_client import supabase
+from core.auth import _get_user_from_header, _require_active_membership
 from datetime import datetime
 import uuid
-# Ye function add karo file ke top pe, imports ke baad
 from datetime import datetime
 
 def parse_date(date_str):
@@ -24,7 +24,9 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 @router.post("/upload")
-async def upload_invoice(file: UploadFile = File(...)):
+async def upload_invoice(company_id: str = Query(...), authorization: str | None = Header(None), file: UploadFile = File(...)):
+    user = _get_user_from_header(authorization)
+    _require_active_membership(user["id"], company_id)
     """
     Main endpoint — full pipeline:
     1. Validate file
@@ -100,6 +102,7 @@ async def upload_invoice(file: UploadFile = File(...)):
 
         if not existing_vendor.data:
             supabase.table("vendors").insert({
+                "company_id": company_id,
                 "name": vendor_name,
                 "gstin": normalized_gstin,
                 "address": vendor_address or None,
@@ -108,6 +111,7 @@ async def upload_invoice(file: UploadFile = File(...)):
 
     supabase.table("invoices").insert({
         "id": invoice_id,
+        "company_id": company_id,
         "vendor_name": vendor_name,
         "vendor_gstin": gstin,
         "vendor_address": vendor_address,
@@ -163,13 +167,17 @@ async def upload_invoice(file: UploadFile = File(...)):
 
 
 @router.get("/")
-async def get_all_invoices():
-    """Get all invoices from database"""
+async def get_all_invoices(company_id: str = Query(...), authorization: str | None = Header(None)):
+    user = _get_user_from_header(authorization)
+    _require_active_membership(user["id"], company_id)
     try:
         response = supabase.table("invoices") \
             .select("*") \
+            .eq("company_id", company_id) \
             .order("created_at", desc=True) \
             .execute()
         return {"success": True, "invoices": response.data}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

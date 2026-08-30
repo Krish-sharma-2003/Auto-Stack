@@ -2,10 +2,11 @@ from datetime import date, datetime
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel, Field
 
 from core.supabase_client import supabase
+from core.auth import _get_user_from_header, _require_active_membership
 from services.inventory_service import normalize_product_name
 
 
@@ -33,12 +34,15 @@ class SalesInvoiceCreate(BaseModel):
 
 
 @router.post("")
-async def create_sales_invoice(invoice: SalesInvoiceCreate):
+async def create_sales_invoice(company_id: str = Query(...), authorization: str | None = Header(None), invoice: SalesInvoiceCreate = ...):
+    user = _get_user_from_header(authorization)
+    _require_active_membership(user["id"], company_id)
     invoice_id = str(uuid.uuid4())
 
     try:
         supabase.table("sales_invoices").insert({
             "id": invoice_id,
+            "company_id": company_id,
             "invoice_no": invoice.invoice_no,
             "party_name": invoice.party_name,
             "invoice_date": invoice.invoice_date.isoformat(),
@@ -61,6 +65,7 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
         try:
             existing = supabase.table("inventory") \
                 .select("*") \
+                .eq("company_id", company_id) \
                 .ilike("product_name", product_name) \
                 .execute()
 
@@ -89,10 +94,11 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
             supabase.table("inventory").update({
                 "quantity": new_quantity,
                 "last_updated": datetime.utcnow().isoformat(),
-            }).eq("id", product["id"]).execute()
+            }).eq("company_id", company_id).eq("id", product["id"]).execute()
             inventory_updated = True
 
             supabase.table("stock_movements").insert({
+                "company_id": company_id,
                 "invoice_id": invoice_id,
                 "product_name": product_name,
                 "quantity_added": -item.quantity,
@@ -121,7 +127,7 @@ async def create_sales_invoice(invoice: SalesInvoiceCreate):
                     supabase.table("inventory").update({
                         "quantity": available_qty,
                         "last_updated": datetime.utcnow().isoformat(),
-                    }).eq("id", product["id"]).execute()
+                    }).eq("company_id", company_id).eq("id", product["id"]).execute()
                 except Exception as rollback_exc:
                     logger.exception(
                         "Sales inventory rollback failed: invoice_id=%s product=%r quantity=%s",

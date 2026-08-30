@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { ArrowUpRight, ArrowDownRight, Search, Calendar, Loader2, AlertTriangle, PackageSearch, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 type Movement = {
   id: string;
@@ -22,6 +24,7 @@ export function StockMovementHistory() {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { activeCompanyId } = useCompany();
 
   useEffect(() => {
     let active = true;
@@ -30,7 +33,12 @@ export function StockMovementHistory() {
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(`${API_BASE}/api/stock-movements/`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/api/stock-movements/?company_id=${activeCompanyId}`, { headers });
         const data = await response.json();
         if (!response.ok || !data.success) {
           throw new Error(data.detail || `Server error (${response.status})`);

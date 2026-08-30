@@ -84,6 +84,23 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const acceptInvite = async (): Promise<boolean> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/companies/accept-invite`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const result = await response.json();
+      return response.ok && result.success;
+    } catch {
+      return false;
+    }
+  };
+
   const createCompany = async (data: Partial<Company>): Promise<void> => {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
@@ -112,7 +129,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const closeCreateModal = () => setShowCreateModal(false);
 
   useEffect(() => {
-    refresh();
+    const load = async () => {
+      await refresh();
+      // If no companies after refresh, check for pending invite
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && companies.length === 0) {
+        const accepted = await acceptInvite();
+        if (accepted) {
+          await refresh();
+        }
+      }
+    };
+    load();
   }, []);
 
   return (

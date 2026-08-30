@@ -4,6 +4,8 @@ import { Plus, Trash2, Printer, Eye } from 'lucide-react';
 import { parties, products, units } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
+import { useCompany } from '@/context/CompanyContext';
+import { supabase } from '@/lib/supabaseClient';
 
 interface ChallanItem {
   id: string;
@@ -18,6 +20,7 @@ function generateId() {
 }
 
 export function Challan() {
+  const { activeCompanyId } = useCompany();
   const [partyName, setPartyName] = useState('');
   const [challanNo] = useState(
     () => `CH-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000) + 1).padStart(3, '0')}`
@@ -87,9 +90,14 @@ export function Challan() {
     setSaveMessage('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/challans`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/api/challans?company_id=${activeCompanyId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           challan_no: challanNo,
           party_name: partyName,

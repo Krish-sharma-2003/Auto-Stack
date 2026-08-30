@@ -1,18 +1,22 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Header
 
 from core.supabase_client import supabase
+from core.auth import _get_user_from_header, _require_active_membership
 
 
 router = APIRouter(prefix="/api/stock-movements", tags=["Stock Movements"])
 
 
 @router.get("/")
-async def get_stock_movements():
+async def get_stock_movements(company_id: str = Query(...), authorization: str | None = Header(None)):
+    user = _get_user_from_header(authorization)
+    _require_active_membership(user["id"], company_id)
     """Return movement history with a readable purchase/sales invoice reference."""
     try:
         response = (
             supabase.table("stock_movements")
             .select("id, invoice_id, product_name, quantity_added, movement_type, created_at")
+            .eq("company_id", company_id)
             .order("created_at", desc=True)
             .execute()
         )
@@ -27,6 +31,7 @@ async def get_stock_movements():
                     supabase.table("invoices")
                     .select("invoice_number")
                     .eq("id", invoice_id)
+                    .eq("company_id", company_id)
                     .limit(1)
                     .execute()
                 )
@@ -38,6 +43,7 @@ async def get_stock_movements():
                         supabase.table("sales_invoices")
                         .select("invoice_no")
                         .eq("id", invoice_id)
+                        .eq("company_id", company_id)
                         .limit(1)
                         .execute()
                     )

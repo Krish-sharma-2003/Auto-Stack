@@ -109,14 +109,15 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
     }
 
 
-async def get_inventory() -> dict:
+async def get_inventory(company_id: str) -> dict:
     """
-    Fetch all inventory items with low stock alerts.
+    Fetch all inventory items with low stock alerts for a specific company.
     Low stock = quantity less than 10 (can be made configurable)
     """
     try:
         response = supabase.table("inventory") \
             .select("*") \
+            .eq("company_id", company_id) \
             .order("product_name") \
             .execute()
 

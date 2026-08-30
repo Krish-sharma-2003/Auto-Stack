@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 
 from core.supabase_client import supabase
+from core.auth import _get_user_from_header
 
 router = APIRouter(prefix="/api/companies", tags=["Companies"])
 
@@ -30,25 +31,10 @@ class CompanyCreate(BaseModel):
     logo_url: str | None = None
 
 
-def _get_user_from_header(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = authorization.split(" ", 1)[1]
-    try:
-        user_resp = supabase.auth.get_user(jwt=token)
-        user = user_resp.user if hasattr(user_resp, "user") else user_resp.get("user")
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return user.id
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail=f"Auth failed: {str(exc)}")
-
-
 @router.get("/my")
 async def list_my_companies(authorization: str | None = Header(None)):
-    user_id = _get_user_from_header(authorization)
+    user = _get_user_from_header(authorization)
+    user_id = user["id"]
     try:
         response = (
             supabase.table("company_users")
@@ -93,7 +79,8 @@ async def list_my_companies(authorization: str | None = Header(None)):
 
 @router.post("")
 async def create_company(company: CompanyCreate, authorization: str | None = Header(None)):
-    user_id = _get_user_from_header(authorization)
+    user = _get_user_from_header(authorization)
+    user_id = user["id"]
     company_id = str(uuid.uuid4())
 
     try:

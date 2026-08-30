@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { API_BASE } from '@/lib/api';
+import { supabase } from '@/lib/supabaseClient';
+import { useCompany } from '@/context/CompanyContext';
 
 export interface Party {
   id: string;
@@ -48,6 +50,7 @@ export function AddPartyModal({ isOpen, onClose, onCreated }: AddPartyModalProps
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const { activeCompanyId } = useCompany();
 
   const update = (field: keyof typeof emptyForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -61,9 +64,14 @@ export function AddPartyModal({ isOpen, onClose, onCreated }: AddPartyModalProps
     setSaving(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE}/api/parties/`, {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch(`${API_BASE}/api/parties/?company_id=${activeCompanyId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(form),
       });
       const result = await response.json();
