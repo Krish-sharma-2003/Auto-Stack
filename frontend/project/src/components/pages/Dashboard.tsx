@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Package, AlertTriangle, FileText, TrendingUp, ExternalLink, type LucideIcon } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { invoices, lowStockProducts, generateInvoiceVolumeData, generateStockValueByProduct, generateRiskDistribution } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { API_BASE } from '@/lib/api';
-import type { Invoice, RiskLevel } from '@/types';
+import type { RiskLevel } from '@/types';
 import { useCompany } from '@/context/CompanyContext';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -97,9 +96,9 @@ function StatCard({ stat, index }: { stat: Stat; index: number }) {
   );
 }
 
-function InvoiceRow({ invoice, index }: { invoice: Invoice; index: number }) {
-  const riskStyle = riskColors[invoice.risk];
-  const statusStyle = statusColors[invoice.status];
+function InvoiceRow({ invoice, index }: { invoice: any; index: number }) {
+  const riskStyle = riskColors[(invoice.risk_level as RiskLevel) || 'NONE'] || riskColors.NONE;
+  const statusStyle = statusColors[(invoice.status as keyof typeof statusColors) || 'PROCESSED'] || statusColors.PROCESSED;
 
   return (
     <motion.tr
@@ -108,13 +107,13 @@ function InvoiceRow({ invoice, index }: { invoice: Invoice; index: number }) {
       transition={{ delay: index * 0.05 }}
       className="hover:bg-slate-50 transition-colors"
     >
-      <td className="px-4 py-3 text-sm font-medium text-blue-600">{invoice.invoiceNo}</td>
-      <td className="px-4 py-3 text-sm text-slate-700">{invoice.vendor}</td>
+      <td className="px-4 py-3 text-sm font-medium text-blue-600">{invoice.invoice_number || invoice.id}</td>
+      <td className="px-4 py-3 text-sm text-slate-700">{invoice.vendor_name || '—'}</td>
       <td className="px-4 py-3 text-sm text-slate-500">
-        {invoice.date.toLocaleDateString('en-IN')}
+        {invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-IN') : '—'}
       </td>
       <td className="px-4 py-3 text-sm font-medium text-slate-800">
-        ₹{invoice.amount.toLocaleString('en-IN')}
+        ₹{Number(invoice.total_amount || 0).toLocaleString('en-IN')}
       </td>
       <td className="px-4 py-3">
         <span
@@ -125,7 +124,7 @@ function InvoiceRow({ invoice, index }: { invoice: Invoice; index: number }) {
             riskStyle.pulse && 'animate-pulse-alert'
           )}
         >
-          {invoice.risk}
+          {invoice.risk_level || 'NONE'}
         </span>
       </td>
       <td className="px-4 py-3">
@@ -137,14 +136,14 @@ function InvoiceRow({ invoice, index }: { invoice: Invoice; index: number }) {
           )}
         >
           <span className={cn('w-1.5 h-1.5 rounded-full', statusStyle.dot)} />
-          {invoice.status.replace('_', ' ')}
+          {(invoice.status || 'PROCESSED').replace('_', ' ')}
         </span>
       </td>
     </motion.tr>
   );
 }
 
-function LowStockPanel() {
+function LowStockPanel({ alerts }: { alerts: any[] }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -153,42 +152,45 @@ function LowStockPanel() {
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-slate-800">Low Stock Alerts</h3>
-        <span className="text-xs text-red-600 font-medium">{lowStockProducts.length} items</span>
+        <span className="text-xs text-red-600 font-medium">{alerts.length} items</span>
       </div>
       <div className="space-y-4">
-        {lowStockProducts.map((product, index) => {
-          const percentage = (product.qty / 100) * 100;
-          const barColor = percentage < 10 ? 'bg-red-500' : percentage < 30 ? 'bg-amber-500' : 'bg-green-500';
+        {alerts.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">No low stock alerts</p>
+        ) : (
+          alerts.map((product, index) => {
+            const percentage = product.quantity ? Math.min((product.quantity / 100) * 100, 100) : 0;
+            const barColor = percentage < 10 ? 'bg-red-500' : percentage < 30 ? 'bg-amber-500' : 'bg-green-500';
 
-          return (
-            <motion.div
-              key={product.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-slate-800">{product.name}</span>
-                <span className={cn(
-                  'text-xs font-medium',
-                  product.status === 'Out of Stock' ? 'text-red-600' : 'text-amber-600'
-                )}>
-                  {product.qty} {product.unit}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mb-2">{product.category}</p>
-              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(percentage, 100)}%` }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
-                  className={cn('h-full rounded-full', barColor)}
-                />
-              </div>
-            </motion.div>
-          );
-        })}
+            return (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-slate-800">{product.product_name}</span>
+                  <span className={cn(
+                    'text-xs font-medium',
+                    (product.quantity || 0) === 0 ? 'text-red-600' : 'text-amber-600'
+                  )}>
+                    {product.quantity || 0} {product.unit || ''}
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${percentage}%` }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                    className={cn('h-full rounded-full', barColor)}
+                  />
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </div>
     </motion.div>
   );
@@ -196,76 +198,70 @@ function LowStockPanel() {
 
 export function Dashboard() {
   const [stats, setStats] = useState<Stat[]>(statsTemplate);
-  const invoiceData = generateInvoiceVolumeData();
-  const stockData = generateStockValueByProduct();
-  const riskData = generateRiskDistribution();
+  const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
+  const [lowStockAlerts, setLowStockAlerts] = useState<any[]>([]);
+  const [invoiceVolume, setInvoiceVolume] = useState<any[]>([]);
+  const [stockValueData, setStockValueData] = useState<any[]>([]);
+  const [riskData, setRiskData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { activeCompanyId } = useCompany();
 
   useEffect(() => {
     let active = true;
 
-    const loadStats = async () => {
+    const loadDashboard = async () => {
+      if (!activeCompanyId) return;
+      setLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
-        const companyId = activeCompanyId;
-
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const [invRes, invoiceRes] = await Promise.all([
-          fetch(`${API_BASE}/api/inventory/?company_id=${companyId}`, { headers }),
-          fetch(`${API_BASE}/api/invoices/?company_id=${companyId}`, { headers }),
-        ]);
-        const inventory = await invRes.json();
-        const invoicesData = await invoiceRes.json();
+        const response = await fetch(`${API_BASE}/api/dashboard/summary?company_id=${activeCompanyId}`, { headers });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.detail || 'Failed to load dashboard');
+        }
 
-        const items: any[] = inventory.items || [];
-        const totalProducts = inventory.total_products ?? items.length;
-        const lowStock = inventory.low_stock_count ?? 0;
-        const totalValue = items.reduce(
-          (sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
-          0
-        );
-
-        const allInvoices: any[] = invoicesData.invoices || [];
-        const now = new Date();
-        const invoicesThisMonth = allInvoices.filter((iv) => {
-          const d = new Date(iv.created_at || iv.invoice_date);
-          return (
-            !isNaN(d.getTime()) &&
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
-          );
-        }).length;
+        const summary = result.summary || {};
 
         if (!active) return;
+
         setStats((prev) =>
           prev.map((s) => {
             switch (s.title) {
               case 'Total Products':
-                return { ...s, value: totalProducts };
+                return { ...s, value: summary.total_products || 0 };
               case 'Low Stock Alerts':
-                return { ...s, value: lowStock };
+                return { ...s, value: summary.low_stock_count || 0 };
               case 'Invoices This Month':
-                return { ...s, value: invoicesThisMonth };
+                return { ...s, value: summary.invoices_this_month || 0 };
               case 'Total Inventory Value':
-                return { ...s, value: Math.round(totalValue) };
+                return { ...s, value: summary.total_inventory_value || 0 };
               default:
                 return s;
             }
           })
         );
+
+        setRecentInvoices(summary.recent_invoices || []);
+        setLowStockAlerts(summary.low_stock_alerts || []);
+        setInvoiceVolume(summary.invoice_volume_30d || []);
+        setStockValueData(summary.top_products_by_value || []);
+        setRiskData(summary.risk_distribution || []);
       } catch (e) {
-        console.error('Dashboard stats load error:', e);
+        console.error('Dashboard load error:', e);
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
-    loadStats();
+    loadDashboard();
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeCompanyId]);
 
   return (
     <div className="space-y-6">
@@ -303,16 +299,30 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.slice(0, 5).map((invoice, index) => (
-                  <InvoiceRow key={invoice.id} invoice={invoice} index={index} />
-                ))}
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">
+                      Loading invoices…
+                    </td>
+                  </tr>
+                ) : recentInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">
+                      No invoices yet
+                    </td>
+                  </tr>
+                ) : (
+                  recentInvoices.map((invoice, index) => (
+                    <InvoiceRow key={invoice.id} invoice={invoice} index={index} />
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </motion.div>
 
         {/* Low Stock Panel */}
-        <LowStockPanel />
+        <LowStockPanel alerts={lowStockAlerts} />
       </div>
 
       {/* Charts Row */}
@@ -326,7 +336,7 @@ export function Dashboard() {
         >
           <h3 className="font-semibold text-slate-800 mb-4">Invoice Volume (30 Days)</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={invoiceData}>
+            <LineChart data={invoiceVolume}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94A3B8" />
               <YAxis tick={{ fontSize: 12 }} stroke="#94A3B8" />
@@ -358,7 +368,7 @@ export function Dashboard() {
         >
           <h3 className="font-semibold text-slate-800 mb-4">Top Products by Stock Value</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={stockData} layout="vertical">
+            <BarChart data={stockValueData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94A3B8" />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} stroke="#94A3B8" />

@@ -108,12 +108,11 @@ export function UploadInvoice() {
 
       const formData = new FormData();
       formData.append('file', selectedFile);
-      if (activeCompanyId) formData.append('company_id', activeCompanyId);
 
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch(`${API_BASE}/api/invoices/upload`, {
+      const response = await fetch(`${API_BASE}/api/invoices/upload?company_id=${activeCompanyId}`, {
         method: 'POST',
         headers,
         body: formData,

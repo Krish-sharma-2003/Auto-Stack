@@ -7,7 +7,7 @@ def normalize_product_name(product_name: str) -> str:
     return re.sub(r"\s+", " ", product_name.strip())
 
 
-async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict:
+async def update_stock_from_invoice(invoice_data: dict, invoice_id: str, company_id: str) -> dict:
     """
     After invoice is parsed and verified, update stock levels in Supabase.
     
@@ -41,6 +41,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
             # Check if product already exists in inventory
             existing = supabase.table("inventory") \
                 .select("*") \
+                .eq("company_id", company_id) \
                 .ilike("product_name", normalize_product_name(product_name)) \
                 .execute()
 
@@ -55,6 +56,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
                         "last_updated": datetime.utcnow().isoformat(),
                         "unit_price": unit_price  # update to latest price
                     }) \
+                    .eq("company_id", company_id) \
                     .eq("id", product["id"]) \
                     .execute()
 
@@ -70,6 +72,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
                 # New product → insert into inventory
                 supabase.table("inventory") \
                     .insert({
+                        "company_id": company_id,
                         "product_name": product_name,
                         "quantity": quantity,
                         "unit": unit,
@@ -87,6 +90,7 @@ async def update_stock_from_invoice(invoice_data: dict, invoice_id: str) -> dict
             # Log stock movement (audit trail)
             supabase.table("stock_movements") \
                 .insert({
+                    "company_id": company_id,
                     "invoice_id": invoice_id,
                     "product_name": product_name,
                     "quantity_added": quantity,

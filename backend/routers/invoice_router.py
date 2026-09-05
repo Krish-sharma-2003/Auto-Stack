@@ -129,7 +129,7 @@ async def upload_invoice(company_id: str = Query(...), authorization: str | None
     stock_reason = None
 
     if risk_level in ["NONE", "LOW"]:
-        stock_update = await update_stock_from_invoice(invoice_data, invoice_id)
+        stock_update = await update_stock_from_invoice(invoice_data, invoice_id, company_id)
         item_errors = [
             result for result in stock_update.get("results", [])
             if result.get("action") == "ERROR"
